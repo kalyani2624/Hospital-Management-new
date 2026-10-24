@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central Command — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<a class="skip-link" href="#centralId-search">Skip to CentralId search</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>One Citizen, One Record, Every Hospital</small></div>
+  <span class="role-badge" data-role-badge>Role: SuperAdmin</span>
+  <label class="hint" for="role-sel" style="margin:0">Role</label>
+  <select id="role-sel" data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <label class="hint" for="hospital-scope" style="margin:0">Scope</label>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off" aria-describedby="cid-hint">
+  <button class="btn btn-primary" id="centralId-go" style="min-height:44px">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending Referrals —</span><span id="ticker-updated" class="hint"></span>
+  <button class="btn" id="ticker-live" aria-pressed="true" style="min-height:44px">Live — Pause</button></span>
+</div>
+<div class="wrap" style="padding-bottom:8px"><span id="cid-hint" class="hint">Type any centralId and jump to unified history in one step.</span><div class="recent-chips" id="recent-searches" style="margin-top:6px"></div></div>
+</div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html" aria-current="page">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Central Command</h1><hr class="ashoka" aria-hidden="true">
+  <p class="hint">Ministry view of whole network health in 10 seconds. Auto-refresh 60s. <span class="badge available">● Live</span></p>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <section aria-label="Census KPIs"><div class="kpi-grid" id="kpi-grid">
+    <div class="card kpi"><div class="skeleton" style="height:60px"></div></div><div class="card kpi"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card kpi"><div class="skeleton" style="height:60px"></div></div><div class="card kpi"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card kpi"><div class="skeleton" style="height:60px"></div></div><div class="card kpi"><div class="skeleton" style="height:60px"></div></div>
+  </div></section>
+  <div class="cols cols-2" style="margin-top:12px">
+    <section class="card" aria-labelledby="occ-h"><h2 id="occ-h">Bed occupancy by hospital</h2>
+      <p class="hint" id="occ-summary">Bar chart with table fallback.</p><div id="occ-chart" aria-describedby="occ-summary"></div>
+      <details><summary>Data table alternative</summary><div class="table-scroll"><table id="occ-table"><thead><tr><th>Hospital</th><th>Occupied</th><th>Total</th><th>%</th></tr></thead><tbody></tbody></table></div></details>
+    </section>
+    <section class="card" aria-labelledby="appt-h"><h2 id="appt-h">Appointments — last 14 days</h2>
+      <p class="hint">Line summary from live appointment records (grouped by date).</p><div id="appt-chart"></div>
+      <details><summary>Data table alternative</summary><div class="table-scroll"><table id="appt-table"><thead><tr><th>Date</th><th>Count</th></tr></thead><tbody></tbody></table></div></details>
+    </section>
+  </div>
+  <section class="card" style="margin-top:12px" aria-labelledby="avail-h"><h2 id="avail-h">Availability by hospital</h2>
+    <div class="table-scroll"><table id="avail-table"><thead><tr><th>Hospital</th><th>City</th><th>Total</th><th>Occupied</th><th>Available</th><th>Load</th><th>Action</th></tr></thead><tbody><tr><td colspan="7">Loading…</td></tr></tbody></table></div>
+  </section>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap">Govt Hospital Hub · Central DB + SOAP <code>/ws/central.wsdl</code> · API <code>http://localhost:8086/api</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  function load(){
+    Hub.api('/central/census').then(function(c){
+      var occ = Number(c.occupiedBeds)||0, tot = Number(c.totalBeds)||0;
+      var pct = tot? Math.round(occ/tot*100):0;
+      var cards = [
+        ['Hospitals', c.hospitals], ['Doctors', c.doctors], ['Patients', c.patients],
+        ['Appointments', c.appointments], ['Referrals', c.referrals],
+        ['Beds occupied', occ + '/' + tot + ' (' + pct + '%)']
+      ];
+      document.getElementById('kpi-grid').innerHTML = cards.map(function(k){
+        return '<div class="card kpi"><div class="label">'+k[0]+'</div><div class="value">'+k[1]+'</div><div class="delta">central census · live</div></div>';
+      }).join('');
+    }).catch(function(e){ Hub.showError('#page-error', e.message, 'Check backend is running on port 8086, then Retry.'); });
+    Hub.api('/central/availability').then(function(rows){
+      rows = rows||[];
+      if(!rows.length){ document.querySelector('#avail-table tbody').innerHTML = '<tr><td colspan="7"><div class="empty">No hospitals yet.<br><a class="btn btn-cta" href="hospitals.html" style="margin-top:8px">Create Hospital (SuperAdmin)</a></div></td></tr>'; return; }
+      document.querySelector('#avail-table tbody').innerHTML = rows.map(function(r){
+        return '<tr><td><strong>'+Hub.esc(r.hospitalName)+'</strong><br><small>#'+r.hospitalId+'</small></td><td>'+Hub.esc(r.city||'—')+'</td><td>'+r.totalBeds+'</td><td>'+r.occupiedBeds+'</td><td><strong>'+r.availableBeds+'</strong></td><td>'+Hub.loadLightHTML(r.totalBeds,r.occupiedBeds)+'</td><td><a class="btn" href="hospitals.html?id='+r.hospitalId+'">View</a></td></tr>';
+      }).join('');
+      var max = Math.max.apply(null, rows.map(function(r){return r.totalBeds||1;}));
+      document.getElementById('occ-chart').innerHTML = rows.map(function(r){
+        var pct = r.totalBeds? Math.round(r.occupiedBeds/r.totalBeds*100):0;
+        return '<div class="bar-row"><span>'+Hub.esc(r.hospitalName)+'</span><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><span>'+pct+'%</span></div>';
+      }).join('');
+      document.querySelector('#occ-table tbody').innerHTML = rows.map(function(r){
+        var pct = r.totalBeds? Math.round(r.occupiedBeds/r.totalBeds*100):0;
+        return '<tr><td>'+Hub.esc(r.hospitalName)+'</td><td>'+r.occupiedBeds+'</td><td>'+r.totalBeds+'</td><td>'+pct+'%</td></tr>';
+      }).join('');
+    }).catch(function(e){ Hub.showError('#page-error', e.message, 'Availability failed. Retry.'); });
+    Hub.api('/appointments').then(function(list){
+      list=list||[]; var by={};
+      list.forEach(function(a){ var d=String(a.appointmentTime||'').slice(0,10); if(d) by[d]=(by[d]||0)+1; });
+      var days = Object.keys(by).sort().slice(-14);
+      if(!days.length){ document.getElementById('appt-chart').innerHTML='<div class="empty">No appointments yet. <a href="appointments.html">Book one</a>.</div>'; return; }
+      var max = Math.max.apply(null, days.map(function(d){return by[d];}));
+      document.getElementById('appt-chart').innerHTML = days.map(function(d){
+        return '<div class="bar-row"><span>'+d+'</span><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(by[d]/max*100)+'%"></div></div><span>'+by[d]+'</span></div>';
+      }).join('');
+      document.querySelector('#appt-table tbody').innerHTML = days.map(function(d){ return '<tr><td>'+d+'</td><td>'+by[d]+'</td></tr>'; }).join('');
+    }).catch(function(){});
+  }
+  document.addEventListener('DOMContentLoaded', load);
+  setInterval(function(){ if(!document.hidden && window.__tickerLive!==false) load(); }, 60000);
+})();
+</script>
+</body>
+</html>

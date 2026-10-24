@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Records — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Clinical visit notes, hospital context</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html" aria-current="page">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Records — visit notes</h1>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div class="alert alert-success" id="page-ok" role="status" hidden></div>
+  <div class="cols cols-2">
+  <section class="card" aria-label="New record"><h2>New visit note (Doctor only)</h2>
+    <label for="f-patient">PatientId *</label><input id="f-patient" type="number" min="1" placeholder="1"><span class="hint">Find via <a href="patients.html">Patients search</a>.</span>
+    <label for="f-hosp">Hospital *</label><select id="f-hosp"></select>
+    <label for="f-doc">Doctor (optional)</label><select id="f-doc"><option value="">—</option></select>
+    <label for="f-diag">Diagnosis *</label><textarea id="f-diag" aria-describedby="diag-hint" placeholder="e.g. Viral fever"></textarea><span class="hint" id="diag-hint">Required. Be specific; avoid abbreviations.</span>
+    <div class="field-error" id="diag-err" role="alert" hidden></div>
+    <label for="f-rx">Prescription</label><textarea id="f-rx" placeholder="Paracetamol 500mg …"></textarea>
+    <p><button class="btn btn-cta" id="f-save" data-requires="SuperAdmin Doctor">Save record</button></p>
+  </section>
+  <section aria-label="Recent list"><h2>Recent notes</h2>
+    <div class="card"><label for="q-central">Filter by patient centralId</label><input type="search" id="q-central" placeholder="MH-2026-004213">
+    <p><button class="btn" id="q-go">Load patient notes</button> <button class="btn btn-ghost" id="q-all">Show latest (all)</button></p></div>
+    <div id="list"><div class="card"><div class="skeleton"></div></div></div>
+  </section>
+  </div>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap"><code>GET/POST /api/records</code> · <code>GET /api/records/patient/{patientId}</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search);
+  function item(r){return '<div class="card" style="margin-bottom:10px"><p><strong>'+Hub.esc(r.visitDate||r.createdAt||'—')+'</strong> <span class="badge available">Visit</span></p><p>'+Hub.esc((r.diagnosis||'').slice(0,120))+'</p><p class="hint">Rx: '+Hub.esc(r.prescription||'—')+' · doctor #'+(Hub.doctorId(r)||'—')+' · hospital #'+Hub.hospitalId(r)+' · patient #'+Hub.patientId(r)+'</p><p><a class="btn" href="patients.html?centralId=" data-cid="'+Hub.patientId(r)+'">View in timeline</a></p></div>';}
+  function render(list){document.getElementById('list').innerHTML=list.length?list.slice().reverse().slice(0,20).map(item).join(''):'<div class="empty">No notes yet. Doctors write the first one above.</div>';}
+  document.getElementById('f-save').addEventListener('click',function(){
+    var diag=document.getElementById('f-diag').value.trim();
+    if(!diag){var e=document.getElementById('diag-err');e.hidden=false;e.textContent='Diagnosis is required. Example: “Viral fever, advised rest”.';document.getElementById('f-diag').setAttribute('aria-invalid','true');return;}
+    Hub.api('/records',{method:'POST',body:{patientId:Number(document.getElementById('f-patient').value),hospitalId:Number(document.getElementById('f-hosp').value),doctorId:document.getElementById('f-doc').value?Number(document.getElementById('f-doc').value):null,diagnosis:diag,prescription:document.getElementById('f-rx').value}})
+    .then(function(r){var ok=document.getElementById('page-ok');ok.hidden=false;ok.innerHTML='Saved ✓ <a class="btn" href="patients.html">View in timeline</a>';Hub.toast('Record saved','success');loadLatest();})
+    .catch(function(e){Hub.showError('#page-error',e.message,'Receptionists cannot write clinical notes — switch to Doctor. 400 → fill required fields.');});
+  });
+  document.getElementById('q-go').addEventListener('click',function(){
+    var cid=document.getElementById('q-central').value.trim(); if(!cid)return;
+    Hub.api('/patients/central/'+encodeURIComponent(cid)).then(function(p){return Hub.api('/records/patient/'+p.id);}).then(render).catch(function(e){Hub.showError('#page-error',e.message,'Check the centralId and retry.');});
+  });
+  document.getElementById('q-all').addEventListener('click',loadLatest);
+  function loadLatest(){Hub.api('/patients').then(function(ps){var p=(ps||[])[0];if(!p){document.getElementById('list').innerHTML='<div class="empty">No patients yet.</div>';return;}return Hub.api('/records/patient/'+p.id).then(render);}).catch(function(e){Hub.showError('#page-error',e.message,'');});}
+  function boot(){
+    Hub.api('/hospitals').then(function(h){document.getElementById('f-hosp').innerHTML=(h||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');}).catch(function(){});
+    Hub.api('/doctors').then(function(d){document.getElementById('f-doc').innerHTML='<option value="">—</option>'+(d||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');}).catch(function(){});
+    if(qs.get('patientId'))document.getElementById('f-patient').value=qs.get('patientId');
+    loadLatest();
+  }
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>

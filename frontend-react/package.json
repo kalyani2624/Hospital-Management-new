@@ -1,0 +1,23 @@
+{
+  "name": "govt-hospital-hub-react",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Govt Centralized Hospital Hub — MAX React portal (PROJECT 6). One Citizen, One Record, Every Hospital.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173 --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --port 5173 --host 127.0.0.1"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.13.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patients + centralId — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>One ID per citizen, every hospital</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html" aria-current="page">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Patients — centralId search</h1>
+  <p class="hint">Format help: centralId like <code>MH-2026-004213</code>. Phone fallback below.</p>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <section class="card" aria-label="Search"><div class="cols cols-2">
+    <div><label for="q-central">CentralId lookup</label><input type="search" id="q-central" placeholder="MH-2026-004213"><p><button class="btn btn-primary" id="q-go">Search centralId</button></p></div>
+    <div><label for="q-phone">Phone fallback</label><input type="tel" id="q-phone" placeholder="98…"><p><button class="btn" id="q-phone-go">Search phone</button> <button class="btn btn-cta" id="reg-toggle">Register new</button></p></div>
+  </div></section>
+  <section class="card" id="reg-card" hidden aria-label="Register patient"><h2>Register patient</h2>
+    <div class="cols cols-2">
+      <div><label for="r-central">CentralId *</label><input id="r-central" type="text" placeholder="MH-2026-004213"><span class="hint">Unique across network.</span></div>
+      <div><label for="r-name">Full name *</label><input id="r-name" type="text" placeholder="Asha Patil"></div>
+      <div><label for="r-age">Age</label><input id="r-age" type="number" min="0" max="140" value="30"></div>
+      <div><label for="r-gender">Gender</label><select id="r-gender"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></div>
+      <div><label for="r-phone">Phone</label><input id="r-phone" type="tel" placeholder="98200 00000"></div>
+      <div><label for="r-hosp">Registered hospitalId</label><input id="r-hosp" type="number" min="1" value="1"></div>
+    </div>
+    <p><button class="btn btn-cta" id="r-go">Save patient</button></p>
+  </section>
+  <section id="detail" hidden aria-label="Patient detail">
+    <div class="card"><h2 id="p-name">—</h2>
+      <p><code id="p-central"></code> <button class="btn" id="p-copy">Copy</button> <span id="p-copied" class="hint" role="status"></span></p>
+      <p class="hint" id="p-meta"></p>
+      <p><a class="btn btn-cta" id="p-book" href="appointments.html">Book appointment</a> <a class="btn" id="p-record" href="records.html">Add record (Doctor)</a> <a class="btn btn-outline" id="p-ref" href="referrals.html">New referral</a></p>
+      <div class="steps" aria-label="Timeline filter">
+        <button class="step active" data-f="all">All</button><button class="step" data-f="appt">Appointments</button><button class="step" data-f="rec">Records</button><button class="step" data-f="ref">Referrals</button>
+      </div>
+      <ol class="timeline" id="timeline"></ol>
+    </div>
+  </section>
+  <section aria-label="Results"><h2>Results</h2><div id="results"><div class="card"><div class="skeleton"></div></div></div></section>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap">Patients: <code>GET /api/patients/central/{centralId}</code> · History: <code>GET /api/patients/{id}/history</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search);
+  var current=null, historyData=null, filter='all';
+  function row(p){
+    return '<div class="card" style="margin-bottom:10px"><h3>'+Hub.esc(p.name)+' <code>'+Hub.esc(p.centralId)+'</code></h3><p class="hint">'+Hub.esc(p.age??'')+' '+(Hub.esc(p.gender||''))+' · phone '+Hub.esc(p.phone||'—')+' · registered hospital #'+(Hub.hospitalId(p)||'—')+'</p><p><button class="btn" data-copy="'+Hub.esc(p.centralId)+'">Copy centralId</button> <a class="btn btn-primary" href="patients.html?centralId='+encodeURIComponent(p.centralId)+'">Open timeline</a></p></div>';
+  }
+  function renderTimeline(){
+    if(!historyData) return;
+    var items=[];
+    (historyData.appointments||[]).forEach(function(a){items.push({t:'appt',when:a.appointmentTime||'',html:'<strong>Appointment '+(a.status||'BOOKED')+'</strong> with doctor #'+Hub.doctorId(a)+' at hospital #'+Hub.hospitalId(a)});});
+    (historyData.medicalRecords||historyData.records||[]).forEach(function(r){items.push({t:'rec',when:r.visitDate||'',html:'<strong>Visit</strong> — Diagnosis: '+Hub.esc(r.diagnosis||'')+' · Rx: '+Hub.esc(r.prescription||'—')+' · doctor #'+(Hub.doctorId(r)||'—')+' · hospital #'+Hub.hospitalId(r)});});
+    (historyData.referrals||[]).forEach(function(r){items.push({t:'ref',when:'',html:'<strong>Referral '+(r.status||'PENDING')+'</strong> hospital #'+Hub.fromHospitalId(r)+' → #'+Hub.toHospitalId(r)+' — '+Hub.esc(r.reason||'')});});
+    items.sort(function(a,b){return String(b.when).localeCompare(String(a.when));});
+    var shown=items.filter(function(i){return filter==='all'||i.t===filter;});
+    document.getElementById('timeline').innerHTML=shown.length?shown.map(function(i){return '<li><time>'+Hub.esc(i.when||'—')+'</time><div>'+i.html+'</div></li>';}).join(''):'<li><div class="empty">No items in this filter.</div></li>';
+  }
+  document.querySelectorAll('[data-f]').forEach(function(b){b.addEventListener('click',function(){filter=b.getAttribute('data-f');document.querySelectorAll('[data-f]').forEach(function(x){x.classList.toggle('active',x===b);});renderTimeline();});});
+  function openByCentralId(cid){
+    document.getElementById('page-error').hidden=true;
+    Hub.api('/patients/central/'+encodeURIComponent(cid)).then(function(p){
+      current=p;
+      document.getElementById('detail').hidden=false;
+      document.getElementById('p-name').textContent=p.name;
+      document.getElementById('p-central').textContent=p.centralId;
+      document.getElementById('p-meta').textContent=(p.age??'')+' '+(p.gender||'')+' · phone '+(p.phone||'—')+' · registered hospital #'+(Hub.hospitalId(p)||'—');
+      document.getElementById('p-book').href='appointments.html?patientId='+p.id;
+      document.getElementById('p-record').href='records.html?patientId='+p.id;
+      document.getElementById('p-ref').href='referrals.html?patientId='+p.id;
+      document.getElementById('results').innerHTML=row(p);
+      Hub.api('/patients/'+p.id+'/history').then(function(h){historyData=h;renderTimeline();}).catch(function(e){document.getElementById('timeline').innerHTML='<li><div class="alert alert-error" role="alert">'+Hub.esc(e.message)+'</div></li>';});
+      document.getElementById('detail').scrollIntoView({behavior:'smooth'});
+    }).catch(function(e){
+      var box=document.getElementById('page-error');box.hidden=false;
+      box.innerHTML='<strong>Not found:</strong> no patient with centralId <code>'+Hub.esc(cid)+'</code>. <button class="btn" id="again" style="margin-left:8px">Search again</button> <button class="btn btn-cta" id="reg2">Register this centralId</button>';
+      var a=document.getElementById('again');if(a)a.addEventListener('click',function(){document.getElementById('q-central').focus();});
+      var r=document.getElementById('reg2');if(r)r.addEventListener('click',function(){document.getElementById('reg-card').hidden=false;document.getElementById('r-central').value=cid;});
+    });
+  }
+  document.getElementById('q-go').addEventListener('click',function(){var v=document.getElementById('q-central').value.trim();if(v)openByCentralId(v);});
+  document.getElementById('q-phone-go').addEventListener('click',function(){
+    var ph=document.getElementById('q-phone').value.trim();
+    Hub.api('/patients').then(function(list){var m=(list||[]).filter(function(p){return (p.phone||'').replace(/\D/g,'').indexOf(ph.replace(/\D/g,''))>=0&&ph;});
+      document.getElementById('results').innerHTML=m.length?m.map(row).join(''):'<div class="empty">No patient with that phone. <a href="#" id="reg3">Register new</a>.</div>';
+      var r=document.getElementById('reg3');if(r)r.addEventListener('click',function(e){e.preventDefault();document.getElementById('reg-card').hidden=false;});
+    });
+  });
+  document.getElementById('reg-toggle').addEventListener('click',function(){var c=document.getElementById('reg-card');c.hidden=!c.hidden;});
+  document.getElementById('p-copy').addEventListener('click',function(){if(current&&navigator.clipboard)navigator.clipboard.writeText(current.centralId).then(function(){document.getElementById('p-copied').textContent='Copied ✓';Hub.toast('Copied '+current.centralId,'success');});});
+  document.getElementById('r-go').addEventListener('click',function(){
+    Hub.api('/patients',{method:'POST',body:{centralId:document.getElementById('r-central').value.trim(),name:document.getElementById('r-name').value.trim(),age:Number(document.getElementById('r-age').value)||0,gender:document.getElementById('r-gender').value,phone:document.getElementById('r-phone').value,hospitalId:Number(document.getElementById('r-hosp').value)||null}})
+    .then(function(p){Hub.toast('Registered '+p.centralId,'success');openByCentralId(p.centralId);})
+    .catch(function(e){
+      var box=document.getElementById('page-error');box.hidden=false;
+      var dup=/already exists|duplicate|unique/i.test(e.message);
+      box.innerHTML='<strong>'+(dup?'Duplicate centralId (409).':'Validation failed (400).')+'</strong> '+Hub.esc(e.message)+(dup?' <a class="btn" href="patients.html?centralId='+encodeURIComponent(document.getElementById('r-central').value.trim())+'">View existing record</a>':' <span class="hint">Fix the highlighted fields and try again.</span>');
+    });
+  });
+  function boot(){
+    if(qs.get('centralId')){document.getElementById('q-central').value=qs.get('centralId');openByCentralId(qs.get('centralId'));}
+    else Hub.api('/patients').then(function(list){document.getElementById('results').innerHTML=(list||[]).slice(0,20).map(row).join('')||'<div class="empty">No patients yet — register the first one above.</div>';}).catch(function(e){Hub.showError('#page-error',e.message,'Retry after backend starts.');});
+  }
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>

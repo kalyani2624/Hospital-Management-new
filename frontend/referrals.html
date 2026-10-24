@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Referrals — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Inter-hospital transfer, no lost history</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html" aria-current="page">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Referrals — inter-hospital queue</h1>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div class="alert alert-success" id="page-ok" role="status" hidden></div>
+  <section class="card"><h2>New referral (Receptionist can create PENDING)</h2>
+    <div class="cols cols-2">
+      <div><label for="n-patient">PatientId</label><input id="n-patient" type="number" min="1" placeholder="1"></div>
+      <div><label for="n-from">From hospitalId</label><select id="n-from"></select></div>
+      <div><label for="n-to">To hospitalId</label><select id="n-to"></select></div>
+      <div><label for="n-reason">Reason *</label><input id="n-reason" type="text" placeholder="Cardiology review"></div>
+    </div>
+    <p><button class="btn btn-cta" id="n-go">Create referral</button> <button class="btn" id="view-toggle" aria-pressed="false">Switch to table view (screen readers)</button></p>
+    <div><label for="f-from">Filter from</label><select id="f-from"><option value="">All</option></select>
+    <label for="f-to">Filter to</label><select id="f-to"><option value="">All</option></select></div>
+  </section>
+  <h2>Queue</h2>
+  <div class="kanban" id="board" aria-label="Referral kanban">
+    <div class="kanban-col"><h3>PENDING <span class="badge pending" data-c="PENDING">0</span></h3><div data-col="PENDING"></div></div>
+    <div class="kanban-col"><h3>ACCEPTED <span class="badge accepted" data-c="ACCEPTED">0</span></h3><div data-col="ACCEPTED"></div></div>
+    <div class="kanban-col"><h3>COMPLETED <span class="badge completed" data-c="COMPLETED">0</span></h3><div data-col="COMPLETED"></div></div>
+  </div>
+  <div class="table-scroll" id="table-view" hidden><table id="ref-table"><thead><tr><th>ID</th><th>Patient</th><th>From → To</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap"><code>GET/POST /api/referrals</code> · <code>PUT /api/referrals/{id}/accept</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search), all=[], tableMode=false;
+  function fill(sel, list){var s=document.getElementById(sel);s.innerHTML=(list||[]).map(function(h){return '<option value="'+h.id+'">'+Hub.esc(h.name)+'</option>';}).join('');}
+  function render(){
+    var ff=document.getElementById('f-from').value, ft=document.getElementById('f-to').value;
+    var rows=all.filter(function(r){return (!ff||String(Hub.fromHospitalId(r))===ff)&&(!ft||String(Hub.toHospitalId(r))===ft);});
+    ['PENDING','ACCEPTED','COMPLETED'].forEach(function(st){
+      var mine=rows.filter(function(r){return (r.status||'PENDING')===st;});
+      var badge=document.querySelector('[data-c="'+st+'"]'); if(badge)badge.textContent=mine.length;
+      var col=document.querySelector('[data-col="'+st+'"]');
+      col.innerHTML=mine.length?mine.map(function(r){
+        return '<div class="ref-card"><p><strong>Patient #'+Hub.patientId(r)+'</strong> <span class="badge '+(st==='PENDING'?'pending':st==='ACCEPTED'?'accepted':'completed')+'">'+st+'</span></p><p>#'+Hub.fromHospitalId(r)+' → #'+Hub.toHospitalId(r)+'</p><p class="hint">'+Hub.esc(r.reason||'')+'</p><p>'+(st==='PENDING'?'<button class="btn btn-cta" data-accept="'+r.id+'" data-requires="SuperAdmin HospitalAdmin">Accept</button>':'<span class="hint">No actions</span>')+'</p></div>';
+      }).join(''):'<div class="empty">'+(st==='PENDING'?'All clear — no pending referrals.':'Empty.')+'</div>';
+    });
+    document.querySelector('#ref-table tbody').innerHTML=rows.map(function(r){
+      return '<tr><td>#'+r.id+'</td><td>'+Hub.patientId(r)+'</td><td>'+Hub.fromHospitalId(r)+' → '+Hub.toHospitalId(r)+'</td><td>'+Hub.esc(r.reason||'')+'</td><td><span class="badge">'+(r.status||'PENDING')+'</span></td><td>'+((r.status||'PENDING')==='PENDING'?'<button class="btn btn-cta" data-accept="'+r.id+'">Accept</button>':'—')+'</td></tr>';
+    }).join('');
+    document.querySelectorAll('[data-accept]').forEach(function(b){b.addEventListener('click',function(){
+      Hub.api('/referrals/'+b.getAttribute('data-accept')+'/accept',{method:'PUT'}).then(function(){Hub.toast('Referral accepted','success');boot();}).catch(function(e){Hub.showError('#page-error',e.message,'Refresh and retry — someone may have accepted first.');});
+    });});
+    if(window.Hub) Hub.initChrome && null;
+  }
+  document.getElementById('view-toggle').addEventListener('click',function(){tableMode=!tableMode;document.getElementById('table-view').hidden=!tableMode;document.getElementById('board').hidden=tableMode;this.textContent=tableMode?'Switch to kanban view':'Switch to table view (screen readers)';this.setAttribute('aria-pressed',tableMode);});
+  ['f-from','f-to'].forEach(function(x){document.getElementById(x).addEventListener('change',render);});
+  document.getElementById('n-go').addEventListener('click',function(){
+    var reason=document.getElementById('n-reason').value.trim();
+    if(!reason){Hub.showError('#page-error','Reason is required.','Describe why the patient is being transferred.');return;}
+    Hub.api('/referrals',{method:'POST',body:{patientId:Number(document.getElementById('n-patient').value),fromHospitalId:Number(document.getElementById('n-from').value),toHospitalId:Number(document.getElementById('n-to').value),reason:reason}})
+    .then(function(r){var ok=document.getElementById('page-ok');ok.hidden=false;ok.textContent='Referral #'+r.id+' created (PENDING). Receiving hospital notified.';Hub.toast('Referral #'+r.id+' created','success');boot();})
+    .catch(function(e){Hub.showError('#page-error',e.message,'400 → patient/from/to required.');});
+  });
+  function boot(){
+    Hub.api('/hospitals').then(function(h){fill('n-from',h);fill('n-to',h);var f1=document.getElementById('f-from');f1.innerHTML='<option value="">All</option>'+(h||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');document.getElementById('f-to').innerHTML=f1.innerHTML;}).catch(function(){});
+    Hub.api('/referrals').then(function(r){all=r||[];render();if(qs.get('patientId'))document.getElementById('n-patient').value=qs.get('patientId');}).catch(function(e){Hub.showError('#page-error',e.message,'Retry.');});
+  }
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>

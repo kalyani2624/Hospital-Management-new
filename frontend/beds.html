@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beds Occupancy — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Live stock per ward, per hospital</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html" aria-current="page">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Beds — occupancy board</h1>
+  <p class="hint">Never color alone: every dot has icon + text + percent. Admit disabled when Full.</p>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div class="alert alert-success" id="page-ok" role="status" hidden></div>
+  <section class="card"><div class="cols cols-2">
+    <div><label for="f-hosp">Hospital filter</label><select id="f-hosp"><option value="">All</option></select></div>
+    <div><label for="f-ward">Ward filter</label><select id="f-ward"><option value="">All wards</option><option>GENERAL</option><option>ICU</option><option>EMERGENCY</option><option>PEDIATRIC</option></select></div>
+  </div></section>
+  <section class="card" style="margin-top:12px"><h2>Admit / Discharge</h2>
+    <div class="cols cols-2">
+      <div><label for="a-hosp">Hospital</label><select id="a-hosp"></select></div>
+      <div><label for="a-ward">Ward</label><select id="a-ward"><option>GENERAL</option><option>ICU</option><option>EMERGENCY</option><option>PEDIATRIC</option></select></div>
+    </div>
+    <p id="a-avail" class="hint" role="status">Select hospital + ward.</p>
+    <p><button class="btn btn-cta" id="a-admit">Admit +1</button> <button class="btn" id="a-dis">Discharge −1 (Undo 30s)</button></p>
+    <details><summary>Upsert ward capacity (SuperAdmin/HospitalAdmin)</summary>
+      <label for="u-total">Total beds</label><input id="u-total" type="number" min="0" value="40">
+      <p><button class="btn btn-primary" id="u-go">Save capacity</button></p>
+    </details>
+  </section>
+  <h2>Matrix</h2><div id="matrix"><div class="card"><div class="skeleton"></div></div></div>
+  <section class="card" style="margin-top:12px"><h2>Ward donut (share of total)</h2><div id="donut"></div></section>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap"><code>GET /api/beds</code> · <code>POST /api/beds/admit?hospitalId=&amp;wardType=</code> (409 when full)</div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search), all=[], hospitals=[];
+  function render(){
+    var fh=document.getElementById('f-hosp').value, fw=document.getElementById('f-ward').value;
+    var rows=all.filter(function(b){return (!fh||String(Hub.hospitalId(b))===fh)&&(!fw||b.wardType===fw);});
+    var byH={}; rows.forEach(function(b){var k=Hub.hospitalId(b);(byH[k]=byH[k]||[]).push(b);});
+    var hnames={}; hospitals.forEach(function(h){hnames[h.id]=h.name;});
+    document.getElementById('matrix').innerHTML=Object.keys(byH).length?Object.keys(byH).map(function(hid){
+      return '<div class="card" style="margin-bottom:10px"><h3>'+Hub.esc(hnames[hid]||('Hospital #'+hid))+'</h3>'+byH[hid].map(function(b){
+        var full=(b.available||0)===0;
+        return '<div style="border-top:1px solid var(--subtle);padding:8px 0"><strong>'+Hub.esc(b.wardType)+'</strong> '+Hub.loadLightHTML(b.total,b.occupied)+Hub.occupancyBarHTML(b.total,b.occupied)+'<br><button class="btn btn-cta" data-admit="'+Hub.hospitalId(b)+'|'+Hub.esc(b.wardType)+'" '+(full?'disabled title="Full — admit disabled"':'')+'>Admit</button> <button class="btn" data-dis="'+Hub.hospitalId(b)+'|'+Hub.esc(b.wardType)+'">Discharge</button>'+(full?' <span class="badge full">Full — <a href="index.html">nearby availability</a></span>':'')+'</div>';
+      }).join('')+'</div>';
+    }).join(''):'<div class="empty">No bed rows match. Create capacity via Upsert above.</div>';
+    document.querySelectorAll('[data-admit]').forEach(function(b){b.addEventListener('click',function(){var p=b.getAttribute('data-admit').split('|');admit(p[0],p[1]);});});
+    document.querySelectorAll('[data-dis]').forEach(function(b){b.addEventListener('click',function(){var p=b.getAttribute('data-dis').split('|');discharge(p[0],p[1]);});});
+    var tot={}; all.forEach(function(b){tot[b.wardType]=(tot[b.wardType]||0)+b.total;});
+    var grand=Object.values(tot).reduce(function(a,c){return a+c;},0)||1;
+    document.getElementById('donut').innerHTML=Object.keys(tot).map(function(w){var pct=Math.round(tot[w]/grand*100);return '<div class="bar-row"><span>'+Hub.esc(w)+'</span><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><span>'+pct+'%</span></div>';}).join('');
+    updateAvailHint();
+  }
+  function updateAvailHint(){
+    var hid=document.getElementById('a-hosp').value, w=document.getElementById('a-ward').value;
+    var row=all.find(function(b){return String(Hub.hospitalId(b))===String(hid)&&b.wardType===w;});
+    var el=document.getElementById('a-avail');
+    if(row){el.innerHTML='Available <strong>'+row.available+' of '+row.total+'</strong> '+Hub.loadLightHTML(row.total,row.occupied);document.getElementById('a-admit').disabled=row.available===0;}
+    else el.textContent='No row for this hospital + ward yet — upsert capacity first.';
+  }
+  function admit(hid,w){Hub.api('/beds/admit?hospitalId='+hid+'&wardType='+encodeURIComponent(w),{method:'POST'}).then(function(){Hub.toast('Admitted 1 ('+w+')','success');boot();}).catch(function(e){var box=document.getElementById('page-error');box.hidden=false;box.innerHTML='<strong>Admit failed (409 — ward full).</strong> '+Hub.esc(e.message)+' <a class="btn" href="index.html">Suggest nearby hospitals</a>';});}
+  function discharge(hid,w){Hub.api('/beds/discharge?hospitalId='+hid+'&wardType='+encodeURIComponent(w),{method:'POST'}).then(function(){var ok=document.getElementById('page-ok');ok.hidden=false;ok.innerHTML='Discharged 1 ('+Hub.esc(w)+'). <button class="btn" id="undo-bed">Undo (re-admit, 30s)</button>';document.getElementById('undo-bed').addEventListener('click',function(){admit(hid,w);});boot();}).catch(function(e){Hub.showError('#page-error',e.message,'');});}
+  document.getElementById('a-admit').addEventListener('click',function(){admit(document.getElementById('a-hosp').value,document.getElementById('a-ward').value);});
+  document.getElementById('a-dis').addEventListener('click',function(){discharge(document.getElementById('a-hosp').value,document.getElementById('a-ward').value);});
+  document.getElementById('u-go').addEventListener('click',function(){Hub.api('/beds',{method:'POST',body:{hospitalId:Number(document.getElementById('a-hosp').value),wardType:document.getElementById('a-ward').value,total:Number(document.getElementById('u-total').value)}}).then(function(){Hub.toast('Capacity saved','success');boot();}).catch(function(e){Hub.showError('#page-error',e.message,'');});});
+  ['f-hosp','f-ward','a-hosp','a-ward'].forEach(function(x){document.getElementById(x).addEventListener('change',render);});
+  function boot(){
+    Hub.api('/hospitals').then(function(h){hospitals=h||[];var opts=hospitals.map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');document.getElementById('f-hosp').innerHTML='<option value="">All</option>'+opts;document.getElementById('a-hosp').innerHTML=opts;if(qs.get('hospitalId')){document.getElementById('f-hosp').value=qs.get('hospitalId');document.getElementById('a-hosp').value=qs.get('hospitalId');}render();}).catch(function(){});
+    Hub.api('/beds').then(function(b){all=b||[];render();}).catch(function(e){Hub.showError('#page-error',e.message,'Start backend, then Retry.');});
+  }
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>

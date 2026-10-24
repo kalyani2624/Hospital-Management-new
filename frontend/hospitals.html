@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hospitals + Load — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Hospitals registry + load drill-down</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html" aria-current="page">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1 id="page-title">Hospitals + Load</h1>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div id="detail-view" hidden>
+    <p><a class="btn" href="hospitals.html">← Back to registry</a></p>
+    <div class="card"><h2 id="d-name">—</h2><p id="d-meta" class="hint"></p><p id="d-load"></p>
+    <div class="alert alert-warning" id="d-warn" role="alert" hidden></div>
+    <div class="steps" role="tablist" aria-label="Hospital detail tabs">
+      <button class="step active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="step" data-tab="doctors" role="tab" aria-selected="false">Doctors</button>
+      <button class="step" data-tab="beds" role="tab" aria-selected="false">Beds</button>
+      <button class="step" data-tab="appt" role="tab" aria-selected="false">Appointments</button>
+    </div>
+    <div id="tab-body"><div class="skeleton"></div></div></div>
+  </div>
+  <div id="list-view">
+    <div class="card"><h2>Filters</h2>
+      <div class="cols cols-2">
+        <div><label for="f-type">Type</label><select id="f-type"><option value="">All types</option><option>CENTRAL</option><option>DISTRICT</option><option>COMMUNITY</option></select></div>
+        <div><label for="f-city">City</label><input type="text" id="f-city" placeholder="e.g. Delhi"></div>
+      </div>
+      <div><label for="f-q">Search name</label><input type="search" id="f-q" placeholder="AIIMS…"></div>
+    </div>
+    <div class="card" style="margin-top:12px" data-requires="SuperAdmin" id="create-card">
+      <h2>Create hospital (SuperAdmin only)</h2>
+      <div class="cols cols-2">
+        <div><label for="c-name">Name</label><input type="text" id="c-name" placeholder="AIIMS Delhi"><div class="field-error" id="c-name-err" role="alert" hidden></div></div>
+        <div><label for="c-city">City</label><input type="text" id="c-city" placeholder="New Delhi"></div>
+        <div><label for="c-type">Type</label><select id="c-type"><option>CENTRAL</option><option>DISTRICT</option><option>COMMUNITY</option></select></div>
+        <div><label for="c-beds">Total beds</label><input type="number" id="c-beds" min="0" value="100"></div>
+      </div>
+      <p><button class="btn btn-cta" id="c-go">Create hospital</button></p>
+    </div>
+    <h2 style="margin-top:16px">Registry</h2>
+    <div id="grid" class="cols cols-2"><div class="card"><div class="skeleton"></div></div></div>
+  </div>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap">Registry: <code>GET/POST /api/hospitals</code> · Load: <code>GET /api/central/hospitals/{id}/load</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var id = qs.get('id');
+  var all = [];
+  function card(h, avail){
+    var l = avail ? Hub.loadLightHTML(avail.totalBeds, avail.occupiedBeds) : '<span class="hint">Load…</span>';
+    return '<div class="card"><h3>'+Hub.esc(h.name)+'</h3><p class="hint">'+Hub.esc(h.type||'')+' · '+Hub.esc(h.city||'')+' · #'+h.id+'</p><p>'+l+'</p><p>'+Hub.occupancyBarHTML(avail?avail.totalBeds:h.totalBeds, avail?avail.occupiedBeds:0)+'</p><p><a class="btn" href="hospitals.html?id='+h.id+'">View detail</a> <a class="btn btn-outline" href="beds.html?hospitalId='+h.id+'">View beds</a></p></div>';
+  }
+  function renderGrid(){
+    var t=document.getElementById('f-type').value, c=document.getElementById('f-city').value.toLowerCase(), q=document.getElementById('f-q').value.toLowerCase();
+    var rows = all.filter(function(h){
+      return (!t||h.type===t)&&(!c||(h.city||'').toLowerCase().indexOf(c)>=0)&&(!q||(h.name||'').toLowerCase().indexOf(q)>=0);
+    });
+    document.getElementById('grid').innerHTML = rows.length? rows.map(function(h){return card(h, h._avail);}).join('') : '<div class="empty">No hospitals match. <a href="hospitals.html">Clear filters</a> or create one above (SuperAdmin).</div>';
+  }
+  ['f-type','f-city','f-q'].forEach(function(x){document.getElementById(x).addEventListener('input', renderGrid);});
+  function loadList(){
+    Hub.api('/hospitals').then(function(list){
+      all=list||[];
+      document.getElementById('grid').innerHTML = all.map(card).join('') || '<div class="empty">Zero hospitals — create the first one (SuperAdmin).</div>';
+      all.forEach(function(h){
+        Hub.api('/central/hospitals/'+h.id+'/load').then(function(l){ h._avail={totalBeds:l.totalBeds,occupiedBeds:l.occupiedBeds}; renderGrid(); }).catch(function(){});
+      });
+      renderGrid();
+    }).catch(function(e){ Hub.showError('#page-error', e.message, 'Start backend on :8086, then Retry.'); });
+  }
+  function loadDetail(){
+    document.getElementById('list-view').hidden=true;
+    document.getElementById('detail-view').hidden=false;
+    var body=document.getElementById('tab-body');
+    Hub.api('/hospitals/'+id).then(function(h){
+      document.getElementById('page-title').textContent=h.name;
+      document.getElementById('d-name').textContent=h.name+' — '+(h.type||'')+' — '+h.city;
+      document.getElementById('d-meta').textContent='id='+h.id+' · totalBeds='+h.totalBeds;
+      return Hub.api('/central/hospitals/'+id+'/load').then(function(l){
+        document.getElementById('d-load').innerHTML=Hub.loadLightHTML(l.totalBeds,l.occupiedBeds)+' '+Hub.occupancyBarHTML(l.totalBeds,l.occupiedBeds)+'<br><span class="hint">Doctors '+l.doctors+' · Appointments '+l.appointments+'</span>';
+        var pct=l.totalBeds?l.occupiedBeds/l.totalBeds*100:0;
+        var w=document.getElementById('d-warn');
+        if(pct>90){w.hidden=false;w.innerHTML='<strong>Pressure &gt;90%.</strong> Consider diverting admits. <a class="btn" href="beds.html?hospitalId='+id+'">View beds</a>';}
+        showTab('overview');
+      });
+    }).catch(function(e){ Hub.showError('#page-error','Hospital '+id+' not found. '+e.message,'Try the <a href="hospitals.html">registry</a> again.'); });
+  }
+  function showTab(t){
+    document.querySelectorAll('[data-tab]').forEach(function(b){var on=b.getAttribute('data-tab')===t;b.classList.toggle('active',on);b.setAttribute('aria-selected',on);});
+    var body=document.getElementById('tab-body'); body.innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
+    if(t==='overview'){
+      Promise.all([Hub.api('/doctors?hospitalId='+id).catch(function(){return[];}),Hub.api('/beds/hospital/'+id).catch(function(){return[];})]).then(function(r){
+        body.innerHTML='<h3>Overview</h3><p>Doctors: <strong>'+r[0].length+'</strong> · Ward rows: <strong>'+r[1].length+'</strong></p>'+r[1].map(function(b){return '<p><strong>'+Hub.esc(b.wardType)+'</strong> '+Hub.occupancyBarHTML(b.total,b.occupied)+'</p>';}).join('')+'<p><a class="btn" href="doctors.html?hospitalId='+id+'">Doctors</a> <a class="btn" href="beds.html?hospitalId='+id+'">Beds</a></p>';
+      });
+    } else if(t==='doctors'){
+      Hub.api('/doctors?hospitalId='+id).then(function(d){body.innerHTML=d.length?d.map(function(x){return '<p><strong>'+Hub.esc(x.name)+'</strong> <span class="badge">'+Hub.esc(x.specialization||'General')+'</span></p>';}).join(''):'<div class="empty">No doctors. HospitalAdmin can add via API <code>POST /api/doctors</code>.</div>';}).catch(function(e){body.innerHTML='<div class="alert alert-error" role="alert">'+Hub.esc(e.message)+'</div>';});
+    } else if(t==='beds'){
+      Hub.api('/beds/hospital/'+id).then(function(b){body.innerHTML=b.length?b.map(function(x){return '<p><strong>'+Hub.esc(x.wardType)+'</strong> total '+x.total+' occupied '+x.occupied+' avail '+x.available+' '+Hub.loadLightHTML(x.total,x.occupied)+'</p>';}).join(''):'<div class="empty">No bed rows. <a href="beds.html">Open beds board</a>.</div>';});
+    } else {
+      Hub.api('/appointments').then(function(a){var mine=(a||[]).filter(function(x){return String(Hub.hospitalId(x))===String(id);});body.innerHTML='<h3>Appointments '+mine.length+'</h3>'+mine.slice(0,20).map(function(x){return '<p>#'+x.id+' patient '+Hub.patientId(x)+' doctor '+Hub.doctorId(x)+' <code>'+Hub.esc(x.appointmentTime||'')+'</code> <span class="badge booked">'+Hub.esc(x.status||'BOOKED')+'</span></p>';}).join('');});
+    }
+  }
+  document.querySelectorAll('[data-tab]').forEach(function(b){b.addEventListener('click',function(){showTab(b.getAttribute('data-tab'));});});
+  var go=document.getElementById('c-go');
+  if(go) go.addEventListener('click',function(){
+    var name=document.getElementById('c-name').value.trim();
+    if(!name){var e=document.getElementById('c-name-err');e.hidden=false;e.textContent='Hospital name is required.';return;}
+    Hub.api('/hospitals',{method:'POST',body:{name:name,city:document.getElementById('c-city').value||'Unknown',type:document.getElementById('c-type').value,totalBeds:Number(document.getElementById('c-beds').value)||0}})
+    .then(function(h){Hub.toast('Created '+h.name+' (#'+h.id+')','success');loadList();})
+    .catch(function(e){Hub.showError('#page-error',e.message,'Duplicate name? Change the name and try again (400/409).');});
+  });
+  document.addEventListener('DOMContentLoaded', function(){ if(id) loadDetail(); else loadList(); });
+})();
+</script>
+</body>
+</html>

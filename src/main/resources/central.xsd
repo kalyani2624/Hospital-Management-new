@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:tns="http://gov.hospital.hub/central"
+    targetNamespace="http://gov.hospital.hub/central"
+    elementFormDefault="qualified">
+
+    <xs:element name="getCentralCensusRequest">
+        <xs:complexType/>
+    </xs:element>
+    <xs:element name="getCentralCensusResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="hospitals" type="xs:long"/>
+                <xs:element name="doctors" type="xs:long"/>
+                <xs:element name="patients" type="xs:long"/>
+                <xs:element name="appointments" type="xs:long"/>
+                <xs:element name="totalBeds" type="xs:int"/>
+                <xs:element name="occupiedBeds" type="xs:int"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="getHospitalLoadRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="hospitalId" type="xs:long"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+    <xs:element name="getHospitalLoadResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="hospitalId" type="xs:long"/>
+                <xs:element name="hospitalName" type="xs:string"/>
+                <xs:element name="doctors" type="xs:int"/>
+                <xs:element name="appointments" type="xs:int"/>
+                <xs:element name="totalBeds" type="xs:int"/>
+                <xs:element name="occupiedBeds" type="xs:int"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="getDoctorScheduleRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="doctorId" type="xs:long"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+    <xs:element name="getDoctorScheduleResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="schedule" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="appointmentId" type="xs:long"/>
+                            <xs:element name="patientCentralId" type="xs:string"/>
+                            <xs:element name="appointmentTime" type="xs:string"/>
+                            <xs:element name="status" type="xs:string"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

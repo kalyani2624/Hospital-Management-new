@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doctors + Slots — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Find the right doctor + free slot</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html" aria-current="page">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Doctors + Slots</h1>
+  <p class="hint">Recognition over recall: visible filters, no memorised IDs. Booking happens in Appointments to prevent errors.</p>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div class="cols cols-2">
+    <section class="card" aria-label="Filters"><h2>Filters</h2>
+      <label for="f-hosp">Hospital</label><select id="f-hosp"><option value="">All hospitals</option></select>
+      <label for="f-spec">Specialization</label><select id="f-spec"><option value="">All</option><option>Cardiology</option><option>Orthopaedic</option><option>General</option><option>Pediatrics</option><option>Emergency</option></select>
+      <label for="f-q">Search name</label><input type="search" id="f-q" placeholder="Dr Rao…">
+      <p><button class="btn" id="f-clear">Clear filters</button> <a class="btn btn-outline" href="referrals.html">Create referral instead</a></p>
+      <div class="card" style="margin-top:12px"><h3>Add doctor (HospitalAdmin)</h3>
+        <label for="n-name">Name</label><input id="n-name" type="text" placeholder="Dr Rao">
+        <label for="n-spec">Specialization</label><input id="n-spec" type="text" placeholder="Cardiology">
+        <label for="n-hosp">HospitalId</label><input id="n-hosp" type="number" min="1" value="1">
+        <p><button class="btn btn-cta" id="n-go" data-requires="SuperAdmin HospitalAdmin">Add doctor</button></p>
+      </div>
+    </section>
+    <section aria-label="Directory"><h2>Directory <span class="hint" id="count"></span></h2><div id="list"><div class="card"><div class="skeleton"></div></div></div></section>
+  </div>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap">Doctors: <code>GET /api/doctors?hospitalId=&amp;specialization=</code> · Depts: <code>GET /api/doctors/hospital/{id}/departments</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search);
+  var all=[], appts=[];
+  function initials(n){return (n||'?').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();}
+  function slotsFor(docId){
+    var today=new Date().toISOString().slice(0,10);
+    var taken={}; appts.forEach(function(a){ if(String(Hub.doctorId(a))===String(docId)&&String(a.appointmentTime||'').slice(0,10)===today&&(a.status||'BOOKED')==='BOOKED'){ taken[String(a.appointmentTime).slice(11,16)]=1; } });
+    var out=['10:00','10:30','11:00','11:30','12:00'];
+    return out.map(function(t){ var b=taken[t]; return '<button class="slot'+(b?' booked':'')+'" '+(b?'disabled aria-disabled="true"':'data-book="'+docId+'" data-time="'+today+'T'+t+'"')+' aria-pressed="false" title="'+(b?'Booked':'Available')+'">'+t+(b?' · Booked':'')+'</button>'; }).join('');
+  }
+  function render(){
+    var h=document.getElementById('f-hosp').value, s=document.getElementById('f-spec').value.toLowerCase(), q=document.getElementById('f-q').value.toLowerCase();
+    var rows=all.filter(function(d){return (!h||String(Hub.hospitalId(d))===h)&&(!s||(d.specialization||'').toLowerCase().indexOf(s)>=0)&&(!q||(d.name||'').toLowerCase().indexOf(q)>=0);});
+    document.getElementById('count').textContent='('+rows.length+' shown)';
+    document.getElementById('list').innerHTML=rows.length?rows.map(function(d){
+      return '<article class="card" style="margin-bottom:10px"><h3><span class="emblem" style="width:32px;height:32px;font-size:13px;display:inline-flex;vertical-align:middle">'+Hub.esc(initials(d.name))+'</span> '+Hub.esc(d.name)+'</h3><p><span class="badge">'+Hub.esc(d.specialization||'General')+'</span> <span class="hint">hospital #'+Hub.hospitalId(d)+' · dept '+Hub.esc((d.department&&d.department.name)||d.departmentId||'—')+'</span></p><p class="hint">Today slots (from live appointments):</p><div class="slot-grid">'+slotsFor(d.id)+'</div><p><a class="btn btn-cta" href="appointments.html?doctorId='+d.id+'&hospitalId='+Hub.hospitalId(d)+'">Book in calendar</a> <button class="btn btn-outline" data-sched="'+d.id+'">View schedule</button></p><div data-sched-out="'+d.id+'"></div></article>';
+    }).join(''):'<div class="empty">No cardiologist here matches. <button class="btn" id="empty-clear">Clear filters</button> <a class="btn btn-outline" href="referrals.html">Create referral</a></div>';
+    var ec=document.getElementById('empty-clear'); if(ec) ec.addEventListener('click',clearF);
+    document.querySelectorAll('[data-book]').forEach(function(b){b.addEventListener('click',function(){location.href='appointments.html?doctorId='+b.getAttribute('data-book')+'&when='+encodeURIComponent(b.getAttribute('data-time'));});});
+    document.querySelectorAll('[data-sched]').forEach(function(b){b.addEventListener('click',function(){
+      var out=document.querySelector('[data-sched-out="'+b.getAttribute('data-sched')+'"]');
+      var mine=appts.filter(function(a){return String(Hub.doctorId(a))===b.getAttribute('data-sched');}).slice(0,10);
+      out.innerHTML=mine.length?'<div class="table-scroll"><table><thead><tr><th>When</th><th>Status</th><th>Patient</th></tr></thead><tbody>'+mine.map(function(a){return '<tr><td><code>'+Hub.esc(a.appointmentTime||'')+'</code></td><td><span class="badge booked">'+Hub.esc(a.status||'')+'</span></td><td>'+Hub.patientId(a)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No upcoming appointments for this doctor.</p>';
+    });});
+  }
+  function clearF(){document.getElementById('f-hosp').value='';document.getElementById('f-spec').value='';document.getElementById('f-q').value='';render();}
+  document.getElementById('f-clear').addEventListener('click',clearF);
+  ['f-hosp','f-spec','f-q'].forEach(function(x){document.getElementById(x).addEventListener('input',render);});
+  document.getElementById('n-go').addEventListener('click',function(){
+    Hub.api('/doctors',{method:'POST',body:{name:document.getElementById('n-name').value,hospitalId:Number(document.getElementById('n-hosp').value),specialization:document.getElementById('n-spec').value||'General'}})
+    .then(function(d){Hub.toast('Added '+d.name,'success');boot();}).catch(function(e){Hub.showError('#page-error',e.message,'Name + hospitalId required (400).');});
+  });
+  function boot(){
+    Hub.api('/hospitals').then(function(h){var s=document.getElementById('f-hosp');s.innerHTML='<option value="">All hospitals</option>'+(h||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');if(qs.get('hospitalId'))s.value=qs.get('hospitalId');render();}).catch(function(){});
+    Promise.all([Hub.api('/doctors').catch(function(e){throw e;}),Hub.api('/appointments').catch(function(){return[];})]).then(function(r){
+      all=r[0]||[];appts=r[1]||[];render();
+    }).catch(function(e){Hub.showError('#page-error',e.message,'Filter failed. <button class="btn" onclick="location.reload()">Retry</button>');});
+  }
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>

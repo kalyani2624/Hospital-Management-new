@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Appointments — Govt Hospital Hub</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="emblem" aria-hidden="true">+</div>
+  <div class="brand">Govt Hospital Hub<small>Book without double-booking</small></div>
+  <span class="role-badge" data-role-badge>Role</span>
+  <select data-role-select aria-label="Switch role" style="max-width:190px"></select>
+  <select id="hospital-scope" aria-label="Hospital scope" style="max-width:230px"><option value="all">All Hospitals</option></select>
+</div></header>
+<div class="cmdbar"><div class="wrap cmdbar-inner">
+  <label for="centralId-search" class="hint" style="margin:0;font-weight:700">CentralId</label>
+  <input type="search" id="centralId-search" placeholder="MH-2026-004213 — press / to focus" autocomplete="off">
+  <button class="btn btn-primary" id="centralId-go">Go</button>
+  <span class="ticker" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="ticker-occupancy">Occupancy —</span><span id="ticker-referrals">Pending —</span></span>
+</div><div class="wrap" style="padding-bottom:8px"><div class="recent-chips" id="recent-searches"></div></div></div>
+<div class="wrap"><div class="scope-banner" data-scope-banner role="status"></div></div>
+<div class="wrap layout">
+<nav class="sidenav" aria-label="Primary"><nav>
+  <a href="index.html">Command</a><a href="hospitals.html">Hospitals</a><a href="doctors.html">Doctors</a>
+  <a href="patients.html">Patients</a><a href="appointments.html" aria-current="page">Appointments</a>
+  <a href="referrals.html">Referrals <span class="count-pill" id="nav-ref-count" hidden>0</span></a>
+  <a href="beds.html">Beds</a><a href="records.html">Records</a><a href="reports.html">Reports</a>
+</nav></nav>
+<main id="main">
+  <h1>Appointments — booking calendar</h1>
+  <p class="hint">3-step wizard. Past dates disabled. Double-book (409) shows nearest free slots. <a href="#today">Skip to today</a></p>
+  <div class="alert alert-error" id="page-error" role="alert" hidden></div>
+  <div class="alert alert-success" id="page-ok" role="status" hidden></div>
+  <div class="cols cols-2">
+  <section class="card" aria-label="Booking wizard">
+    <div class="steps" aria-label="Progress"><div class="step active" id="s1">1 · Patient</div><div class="step" id="s2">2 · Doctor</div><div class="step" id="s3">3 · Date &amp; time</div></div>
+    <div><label for="b-central">Step 1 — Patient centralId</label><input type="search" id="b-central" placeholder="MH-2026-004213"><p><button class="btn btn-primary" id="b-verify">Confirm patient</button> <span id="b-patient" class="hint" role="status"></span></p></div>
+    <div class="cols cols-2">
+      <div><label for="b-hosp">Step 2 — Hospital</label><select id="b-hosp"></select></div>
+      <div><label for="b-doc">Doctor</label><select id="b-doc"></select></div>
+    </div>
+    <div><label for="b-date">Step 3 — Date</label><input type="date" id="b-date"><span class="hint">Past dates disabled automatically.</span>
+    <label>Time slots (conflicts checked against live schedule)</label><div class="slot-grid" id="b-slots"></div></div>
+    <p><button class="btn btn-cta" id="b-book">Book appointment</button> <button class="btn" id="b-agenda">Agenda view (mobile)</button></p>
+  </section>
+  <aside class="card" aria-label="Summary"><h2>Summary rail</h2><div id="summary" class="doc-grid"><span class="hint">Pick patient → doctor → slot.</span></div>
+    <h3>Calendar</h3><div id="cal" class="slot-grid" role="group" aria-label="Next 14 days"></div>
+    <h3>All appointments</h3><div class="table-scroll" style="max-height:320px;overflow:auto"><table id="all-table"><thead><tr><th>ID</th><th>When</th><th>Dr</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+  </aside>
+  </div>
+</main>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<footer class="footer"><div class="wrap"><code>POST /api/appointments/book</code> → 201/409 · <code>PUT /api/appointments/{id}/cancel</code></div></footer>
+<script src="assets/js/app.js"></script>
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search);
+  var patient=null, appts=[], SLOT_TIMES=['09:00','09:30','10:00','10:30','11:00','11:30','12:00','14:00','14:30','15:00'];
+  function todayStr(){return new Date().toISOString().slice(0,10);}
+  function selDate(){return document.getElementById('b-date').value||todayStr();}
+  function refreshSummary(){
+    document.getElementById('summary').innerHTML='<span>Patient: <strong>'+(patient?Hub.esc(patient.name+' ('+patient.centralId+')'):'—')+'</strong></span><span>Doctor: <strong>'+Hub.esc(document.getElementById('b-doc').selectedOptions[0]?document.getElementById('b-doc').selectedOptions[0].text:'—')+'</strong></span><span>Hospital: <strong>'+Hub.esc(document.getElementById('b-hosp').selectedOptions[0]?document.getElementById('b-hosp').selectedOptions[0].text:'—')+'</strong></span><span>Slot: <strong>'+Hub.esc(selDate()+' '+(window.__slot||'—'))+'</strong></span>';
+  }
+  function renderSlots(){
+    var docId=document.getElementById('b-doc').value, d=selDate();
+    var taken={}; appts.forEach(function(a){ if(String(Hub.doctorId(a))===String(docId)&&String(a.appointmentTime||'').slice(0,10)===d&&(a.status||'BOOKED')==='BOOKED'){ taken[String(a.appointmentTime).slice(11,16)]=1; }});
+    document.getElementById('b-slots').innerHTML=SLOT_TIMES.map(function(t){
+      var b=taken[t]; return '<button class="slot'+(b?' booked':'')+'" '+(b?'disabled':'data-slot="'+t+'"')+' aria-pressed="'+(window.__slot===t)+'" aria-label="'+t+(b?' booked':' available')+'">'+t+(b?' · Booked':'')+'</button>';
+    }).join('');
+    document.querySelectorAll('[data-slot]').forEach(function(b){b.addEventListener('click',function(){window.__slot=b.getAttribute('data-slot');renderSlots();refreshSummary();document.getElementById('s3').classList.add('active');});});
+    refreshSummary();
+  }
+  function renderCal(){
+    var el=document.getElementById('cal'); var h='';
+    for(var i=0;i<14;i++){var d=new Date();d.setDate(d.getDate()+i);var s=d.toISOString().slice(0,10);
+      h+='<button class="slot" data-day="'+s+'" '+(i===0?'id="today"':'')+' aria-pressed="'+(selDate()===s)+'">'+s.slice(5)+'</button>';}
+    el.innerHTML=h;
+    el.querySelectorAll('[data-day]').forEach(function(b){b.addEventListener('click',function(){document.getElementById('b-date').value=b.getAttribute('data-day');renderSlots();renderCal();});});
+  }
+  function renderAll(){
+    var tb=document.querySelector('#all-table tbody');
+    tb.innerHTML=(appts||[]).slice().reverse().slice(0,30).map(function(a){
+      return '<tr><td>#'+a.id+'</td><td><code>'+Hub.esc(a.appointmentTime||'')+'</code></td><td>'+Hub.doctorId(a)+'</td><td><span class="badge booked">'+Hub.esc(a.status||'')+'</span></td><td>'+((a.status||'BOOKED')==='BOOKED'?'<button class="btn" data-cancel="'+a.id+'">Cancel</button>':'—')+'</td></tr>';
+    }).join('')||'<tr><td colspan="5">No appointments.</td></tr>';
+    tb.querySelectorAll('[data-cancel]').forEach(function(b){b.addEventListener('click',function(){
+      Hub.api('/appointments/'+b.getAttribute('data-cancel')+'/cancel',{method:'PUT'}).then(function(){Hub.toast('Cancelled #'+b.getAttribute('data-cancel')+' — Undo: rebook same slot','success');boot();}).catch(function(e){Hub.showError('#page-error',e.message,'Refresh and retry.');});
+    });});
+  }
+  document.getElementById('b-verify').addEventListener('click',function(){
+    var cid=document.getElementById('b-central').value.trim(); if(!cid){Hub.toast('Type a centralId first','error');return;}
+    Hub.api('/patients/central/'+encodeURIComponent(cid)).then(function(p){patient=p;document.getElementById('b-patient').textContent='✓ '+p.name+' (id='+p.id+')';document.getElementById('s1').classList.add('active');document.getElementById('s2').classList.add('active');refreshSummary();}).catch(function(){Hub.showError('#page-error','No patient with centralId '+cid+'.','<a href="patients.html?centralId='+encodeURIComponent(cid)+'">Register in Patients</a>');});
+  });
+  document.getElementById('b-agenda').addEventListener('click',function(){
+    var docId=document.getElementById('b-doc').value;
+    var mine=appts.filter(function(a){return !docId||String(Hub.doctorId(a))===String(docId);}).sort(function(a,b){return String(a.appointmentTime).localeCompare(String(b.appointmentTime));}).slice(0,20);
+    Hub.toast(mine.length? mine.map(function(a){return a.appointmentTime+' Dr'+Hub.doctorId(a);}).join(' | ') : 'No agenda items', mine.length?'success':'error');
+  });
+  document.getElementById('b-book').addEventListener('click',function(){
+    var ok=document.getElementById('page-ok'), err=document.getElementById('page-error'); ok.hidden=true; err.hidden=true;
+    if(!patient){Hub.showError('#page-error','Confirm a patient first (Step 1).','Type a centralId and press Confirm patient.');return;}
+    var docId=document.getElementById('b-doc').value, hospId=document.getElementById('b-hosp').value;
+    if(!docId||!hospId){Hub.showError('#page-error','Pick hospital + doctor (Step 2).','');return;}
+    if(!window.__slot){Hub.showError('#page-error','Pick a time slot (Step 3).','Available slots are not struck-through.');return;}
+    var when=selDate()+'T'+window.__slot+':00';
+    if(new Date(when)<=new Date()){Hub.showError('#page-error','appointmentTime must be in the future.','Pick tomorrow or a later slot.');return;}
+    var btn=document.getElementById('b-book'); btn.disabled=true; btn.textContent='Booking…';
+    Hub.api('/appointments/book',{method:'POST',body:{patientId:patient.id,doctorId:Number(docId),hospitalId:Number(hospId),appointmentTime:when}})
+    .then(function(a){btn.disabled=false;btn.textContent='Book appointment';ok.hidden=false;ok.innerHTML='<strong>Booked #'+a.id+'</strong> '+Hub.esc(when)+' <button class="btn" id="undo">Undo cancel (30s)</button> <a class="btn btn-outline" href="records.html?patientId='+patient.id+'">Add to records</a>';document.getElementById('undo').addEventListener('click',function(){Hub.api('/appointments/'+a.id+'/cancel',{method:'PUT'}).then(function(){Hub.toast('Booking undone','success');boot();});});boot();})
+    .catch(function(e){
+      btn.disabled=false;btn.textContent='Book appointment';
+      if(e.status===409){
+        var docTaken=appts.filter(function(a){return String(Hub.doctorId(a))===String(docId)&&String(a.appointmentTime||'').slice(0,10)===selDate();}).map(function(a){return String(a.appointmentTime).slice(11,16);});
+        var free=SLOT_TIMES.filter(function(t){return docTaken.indexOf(t)<0;}).slice(0,3);
+        Hub.showError('#page-error','Double-booked (409): '+e.message,'Nearest free slots on '+selDate()+': '+(free.map(function(t){return '<button class="btn" data-free="'+t+'">'+t+'</button>';}).join(' ')||'none — try another day')+' <a href="doctors.html">Try another doctor</a>');
+        document.querySelectorAll('[data-free]').forEach(function(b){b.addEventListener('click',function(){window.__slot=b.getAttribute('data-free');renderSlots();});});
+      } else Hub.showError('#page-error',e.message,'400 → fix fields. 500 → Retry with support ID.');
+    });
+  });
+  function boot(){
+    document.getElementById('b-date').min=todayStr();
+    Hub.api('/hospitals').then(function(h){var s=document.getElementById('b-hosp');s.innerHTML=(h||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+'</option>';}).join('');if(qs.get('hospitalId'))s.value=qs.get('hospitalId');refreshSummary();}).catch(function(){});
+    Hub.api('/doctors'+(qs.get('hospitalId')?'?hospitalId='+qs.get('hospitalId'):'')).then(function(d){var s=document.getElementById('b-doc');s.innerHTML=(d||[]).map(function(x){return '<option value="'+x.id+'">'+Hub.esc(x.name)+' — '+Hub.esc(x.specialization||'')+'</option>';}).join('');if(qs.get('doctorId'))s.value=qs.get('doctorId');renderSlots();}).catch(function(){});
+    Hub.api('/appointments').then(function(a){appts=a||[];renderSlots();renderCal();renderAll();}).catch(function(e){Hub.showError('#page-error',e.message,'');});
+    if(qs.get('patientId')){Hub.api('/patients/'+qs.get('patientId')).then(function(p){patient=p;document.getElementById('b-patient').textContent='✓ '+p.name;refreshSummary();}).catch(function(){});}
+    if(qs.get('when')){var w=qs.get('when');document.getElementById('b-date').value=w.slice(0,10);window.__slot=w.slice(11,16);}
+    renderCal();
+  }
+  document.getElementById('b-date').addEventListener('change',function(){renderSlots();renderCal();});
+  document.getElementById('b-doc').addEventListener('change',function(){renderSlots();refreshSummary();});
+  document.addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>
